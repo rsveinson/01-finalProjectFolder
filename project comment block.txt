@@ -1,0 +1,41 @@
+/*****************************************************************************
+ * Rob Sveinson
+ * Comp 444 final project
+ * Line following roomba
+ * 
+ * Using a Sparkfun line foolower array and a sonar sensor get a roomba to follow
+ * a dark line on a light bachground. This will be developed in 5 stages as follows;
+ * 
+ * Stage 1 Sonar: Get the roomba to move in a relatively straight line and stop 
+ * when approaching an obstacle. This is necessary to protect the line follower
+ * array that sticks out in front of the roomba.
+ * 
+ * Stage 2 No controller: Get the roomba to follow the line without applying
+ * any control mechanisms. Simply apply additional power to the appropriate
+ * wheel when the roombo starts to go off course.
+ * 
+ * Stage 3 Proportional control: Add proportional control so the power is applied
+ * proportional to the error. This should eliminate most of the oscilation
+ * form the no control version
+ * 
+ * Stage 4 Integral control: Add integral control so that the application of power
+ * is affected by the total error. This will hasten the system's stabalization and account
+ * for any steady state error.
+ * 
+ * Staghe 5 Derivative control: Add derivative control so that the application of power
+ * is affected by the instantaneous slope of the line tangent to the error curve. This will 
+ * allow the system to settle more quickly by eliminating, or reducing, overshoot, meaning the 
+ * robot will start to correct before it passes the set point.
+ * 
+ * This is stage 0: run the roomba in a straight line and stop when it gets to withing
+ * about 20cm of an obstacle. This safety zone may need some adjustment later but that will
+ * be a pretty simple matter.
+ */
+
+#include<SoftwareSerial.h>
+#define SIG A0
+
+// global scope
+
+const float PIE = 3.14159;        // value of pi used in calculating angles
+const int SAFEDIST = 10;          // 20cm safety zone, used for sonar
