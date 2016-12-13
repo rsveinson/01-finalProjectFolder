@@ -2,7 +2,6 @@
  * Rob Sveinson
  * Comp 444 final project
  * Line following roomba
- * version 2: follow a line without any controls in place
  * 
  * Using a Sparkfun line foolower array and a sonar sensor get a roomba to follow
  * a dark line on a light bachground. This will be developed in 5 stages as follows;
@@ -28,25 +27,18 @@
  * allow the system to settle more quickly by eliminating, or reducing, overshoot, meaning the 
  * robot will start to correct before it passes the set point.
  * 
- * This is stage 2: follow aline without any control in place. Should produce large, consisten 
- * oscillations, oscillations will not diminish
+ * This is stage 0: run the roomba in a straight line and stop when it gets to withing
+ * about 20cm of an obstacle. This safety zone may need some adjustment later but that will
+ * be a pretty simple matter.
  */
 
 #include<SoftwareSerial.h>
-#include"Wire.h"              // for I2C serial interface
-#include "sensorbar.h"        // libraries for line follower array
 #define SIG A0
 
 // global scope
 
-const int BASESPEED = 200;            // base speed of wheel motors
-const byte LFAADDRESS = 0x3E;  // assign an address to the line follower array
 const float PIE = 3.14159;        // value of pi used in calculating angles
 const int SAFEDIST = 20;          // 20cm safety zone, used for sonar
-
-// create a new sensor bar object
-SensorBar lfa(LFAADDRESS);     // lfa stands for line follower array
-//delay(20);                    // delay for a tic
 
 // pin assignments for arduino to roomba 7 mini-din port
 
@@ -64,7 +56,6 @@ SoftwareSerial mySerial(rxPin, txPin);  // new port with 9rx and 11tx
                                   // this means pin 4 on roomba connects to pin 9 on arduino
                                   // pin 3 on roomba connects to pin 11 on arduino
 
-
 /*****************************************************************
  * start the serial port to print to serial monitor
  * print opening message to serial monitor
@@ -73,7 +64,7 @@ SoftwareSerial mySerial(rxPin, txPin);  // new port with 9rx and 11tx
  * 
  * put roomba into passive mode opcode 128
  * put roomba into safe mode opcode 130 or 131, they seem to do the same thing
- ******************************************************************************/
+ */
 void setup(){
   Serial.begin(9600);       // start serial port for monitor
   //Serial.println("hello dave");
@@ -82,36 +73,6 @@ void setup(){
                                 // use software serial because roomba's tx doesn't always
                                 // carry enough voltage to meet arduino's requirements
   delay(10);              // set a short delay to allow the command to propegate
-
-/******************************************************************
- * set up the line follower array
- * clearBarStrobe();
- * set indicator lights to be on while sensor is detecting a dark line
- * alternative is setBarStrobe(); sets indicators to blink each time it reads
- * so you get blinking light when a sensor is detecting a line
- * 
- * clearInvertBits();
- * sets array to detect dark line on light background
- * alternative is setInvertBits(); sets array to detect light line on dark background
- *****************************************************************************/
-
-  lfa.clearBarStrobe();
-  lfa.clearInvertBits();
-  delay(20);              // delay a bit
-
-/*****************************************************************************
- * start lfa and play tone to indicate successful start
- *****************************************************************************/
- uint8_t lfaStatus = lfa.begin();
-
- if(lfaStatus){
-  Serial.println("lfa ok");
-  playBeep2();         // change tone later so it's unique to lfa start
- } // end if, lfa began normally
- else{
-  // do something else here maybe set mofe to off
-  while(1);       // trap exectution
- } // end else, lfa didn't begin properly
   
   pinMode (ddPin, OUTPUT);            // set ddPin(5) to output, that's from arduino to roomba
   pinMode(buttonPin, INPUT_PULLUP);   // set the buttonPin(12) as in pullup input pin
@@ -137,9 +98,9 @@ void loop(){
   ping();
   distance = calcDistance();    // calculate the distance to an object
   
-/*/ drive forward until an obstacle is detected
+// drive forward until an obstacle is detected
   while((int)distance > SAFEDIST){
-   //driveWheels(150, 150); 
+   driveWheels(150, 150); 
    ping();
    distance = calcDistance();
    Serial.print("distance to obstacle: ");
@@ -153,65 +114,43 @@ void loop(){
 
   ping();
   distance = calcDistance();
-*/
-
 // drive forward until an obstacle is detected
-  while((int)distance > SAFEDIST){
-    Serial.print("distance to obstacle: ");
-    Serial.println(distance);
-    
-   //driveWheels(150, 150);
-   follow(); 
+  while((int)distance > 10){
+   driveWheels(150, 150); 
    ping();
    distance = calcDistance();
-   //Serial.print("distance to obstacle: ");
-   //Serial.println(distance);
+   Serial.print("distance to obstacle: ");
+   Serial.println(distance);
   } // end while
   stopDrive();
+  delay(2000);
+ 
+  stopDrive();
+
+/*  
+  while((int)distance < 100){
+    ping();
+    distance = calcDistance();
+    driveWheels(-100, 100);
+  }
+*/  
+  //stopDrive();
+  //mySerial.write(173);      // go to off mode
+  
+    
 } // end loop
 
 // ************** my functions *****************
-/*****************************************************
- * main line following funciton
- * will get error from the sensor
- * calcuate the power that should be sent to each wheel
- * drive the roomba with the calculated power
- * 
- * Interface:
- * in: no parameters
- * out: nothing out
- ********************************************************/
- void follow(void){
-  int error;            // error value read from sensor
-  int leftSpeed;        // speed of left wheel motor
-  int rightSpeed;       // speed of right wheel motor
-  
-  error = lfa.getPosition();// get error reading from sensor
-  Serial.println(error);
-  // calculate left and right motor speeds
-  if(error > 0){
-    leftSpeed = BASESPEED + (int)BASESPEED * 0.25;     // increase left wheel speed by 25%
-    rightSpeed = BASESPEED;         // set right wheel speed to base
-  } // end > 0 veering left
-  else
-  if(error < 0){
-    leftSpeed = BASESPEED;         // set left wheel speed to base 
-    rightSpeed = BASESPEED + (int)BASESPEED * 0.25;   // increase right wheel speed by 25%     
-  } // end < 0 veering right
-  else
-  {
-    leftSpeed = BASESPEED;
-    rightSpeed = BASESPEED;
-  } // END == 0 going straight
-  
-  // drive motors
-  driveWheels(rightSpeed, leftSpeed);
-  //driveWheels(0, 0);
- } // end follow
- 
 /*************************************************
 * receive somar echo and calculate distance
 ***************************************************/
+
+void getInfo(void){
+  if (mySerial.available())   //First order of business: listen to Roomba
+    Serial.println(mySerial.read());   //writes to USB input from soft serial if connected to laptop serial monitor
+  
+} // end getInfo
+
 float calcDistance(void){
   float d;
   // reset pinmode to input to receive the echo
@@ -243,14 +182,6 @@ void ping(void){
    mySerial.write("\x8d\x01"); // [141] [1] play it (in slot 1)
  } // end playBeed
 
- /************************************************
- * beep to indicate lfa has been started
- ***************************************************/
- void playBeep2(void){
-   mySerial.write("\x8c\x02\x04\x4c\x10\x4a\x10\x48\x10\x47\x10"); // [140] [1] [4] [68] [32]
-   mySerial.write("\x8d\x02"); // [141] [2] play it (in slot 2)
- } // end playBeed
-
 /**********************************************
  * do a little dance to signal that roomba is in safe mode
  * and is ready to start reciving and transmitting
@@ -270,9 +201,9 @@ void ping(void){
  ********************************************/
 void waitForButton(void){
   while(digitalRead(buttonPin)==HIGH){
-    //Serial.print("button state: ");
-    //Serial.println(digitalRead(buttonPin));
-    //Serial.println("push button to proceed");
+    Serial.print("button state: ");
+    Serial.println(digitalRead(buttonPin));
+    Serial.println("push button to proceed");
   } // end while button pin
 } // end of waitForButton()
 
@@ -288,11 +219,7 @@ void stopDrive(void){
 
 // shut down the oi, roomba won't respond to any commands
 // cycle the power to re-set mode.
-  //mySerial.write(byte(173)); 
-
-// put roomba into passive mode so it won't 
-// respond to oi commands
-  setMode(128);
+  mySerial.write(byte(173));     
                                 
 } // end stopdrive()
 
@@ -310,8 +237,8 @@ void stopDrive(void){
 void driveWheels(int right, int left)
 {
   // compensate for left pull
-  //float comp = left * 0.1;              // compensate for a left pull in my roomba
-  //left += (int)comp;
+  float comp = left * 0.1;              // compensate for a left pull in my roomba
+  left += (int)comp;
   //Serial.print("left comp speed ");
   //Serial.println(left);
   constrain(right, -500, 500);
@@ -340,10 +267,5 @@ void setMode(int modeCode){
   mySerial.write(modeCode);       // put roomba into passive mode
   delay(20);                      // wait for mode change to propegate
 } // end setMode
-
-void getInfo(void){
-  if (mySerial.available())   //First order of business: listen to Roomba
-    Serial.println(mySerial.read());   //writes to USB input from soft serial if connected to laptop serial monitor
-  
-} // end getInfo
+ 
 
