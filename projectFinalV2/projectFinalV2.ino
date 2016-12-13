@@ -43,6 +43,7 @@ const int BASESPEED = 200;            // base speed of wheel motors
 const byte LFAADDRESS = 0x3E;  // assign an address to the line follower array
 const float PIE = 3.14159;        // value of pi used in calculating angles
 const int SAFEDIST = 20;          // 20cm safety zone, used for sonar
+const float CORRECTION = 1.25;     // increase wheel speed by this factor
 
 // create a new sensor bar object
 SensorBar lfa(LFAADDRESS);     // lfa stands for line follower array
@@ -106,9 +107,10 @@ void setup(){
 
  if(lfaStatus){
   Serial.println("lfa ok");
-  playBeep2();         // change tone later so it's unique to lfa start
+  playBeep2();        // change tone later so it's unique to lfa start
  } // end if, lfa began normally
  else{
+  
   // do something else here maybe set mofe to off
   while(1);       // trap exectution
  } // end else, lfa didn't begin properly
@@ -137,30 +139,12 @@ void loop(){
   ping();
   distance = calcDistance();    // calculate the distance to an object
   
-/*/ drive forward until an obstacle is detected
-  while((int)distance > SAFEDIST){
-   //driveWheels(150, 150); 
-   ping();
-   distance = calcDistance();
-   Serial.print("distance to obstacle: ");
-   Serial.println(distance);
-  } // end while
-  stopDrive();
-  delay(2000);
-  
-  // turn CW about 180 degrees
-  //turnCCW(183);
-
-  ping();
-  distance = calcDistance();
-*/
 
 // drive forward until an obstacle is detected
   while((int)distance > SAFEDIST){
     Serial.print("distance to obstacle: ");
     Serial.println(distance);
     
-   //driveWheels(150, 150);
    follow(); 
    ping();
    distance = calcDistance();
@@ -190,18 +174,18 @@ void loop(){
   Serial.println(error);
   // calculate left and right motor speeds
   if(error > 0){
-    leftSpeed = BASESPEED + (int)BASESPEED * 0.25;     // increase left wheel speed by 25%
+    leftSpeed = BASESPEED + (int)BASESPEED * CORRECTION;     // increase left wheel speed by 25%
     rightSpeed = BASESPEED;         // set right wheel speed to base
   } // end > 0 veering left
   else
   if(error < 0){
     leftSpeed = BASESPEED;         // set left wheel speed to base 
-    rightSpeed = BASESPEED + (int)BASESPEED * 0.25;   // increase right wheel speed by 25%     
+    rightSpeed = BASESPEED + (int)BASESPEED * CORRECTION;   // increase right wheel speed by 25%     
   } // end < 0 veering right
   else
   {
-    leftSpeed = BASESPEED;
-    rightSpeed = BASESPEED;
+    leftSpeed = leftSpeed;
+    rightSpeed = rightSpeed;
   } // END == 0 going straight
   
   // drive motors
