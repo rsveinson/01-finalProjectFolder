@@ -28,8 +28,8 @@
  * allow the system to settle more quickly by eliminating, or reducing, overshoot, meaning the 
  * robot will start to correct before it passes the set point.
  * 
- * This is stage 2: follow aline without any control in place. Should produce large, consisten 
- * oscillations, oscillations will not diminish
+ * This is stage 3-5: now that the roomba is following the line it's time to implement and tune the 
+ * pid controller. Sart wtith Kp, Ki, and Kd all = 0. add a p value, then an i vlaue, then a d value
  */
 
 #include<SoftwareSerial.h>
@@ -44,6 +44,25 @@ const byte LFAADDRESS = 0x3E;  // assign an address to the line follower array
 const float PIE = 3.14159;        // value of pi used in calculating angles
 const int SAFEDIST = 20;          // 20cm safety zone, used for sonar
 const float CORRECTION = 1.25;     // increase wheel speed by this factor
+
+// ****** PID constants *****
+
+const float Kp = 1;         // proportional coefficient
+const float Ki = 0;         // integral coefficient
+const float Kd = 0;         // derivative coefficient
+
+// ***** PID variables *****
+
+int error = 0;            // error reading at time t
+int totalError = 0;       // sum of all error readings
+int lastError = 0;        // previous error reading
+int outputV = 0;        // value output by the PID equation
+
+int leftSpeed;        // speed of left wheel motor
+int rightSpeed;       // speed of right wheel motor
+
+int lls = BASESPEED;              // previous left speed
+int lrs = BASESPEED;              // previous right speed
 
 // create a new sensor bar object
 SensorBar lfa(LFAADDRESS);     // lfa stands for line follower array
@@ -98,7 +117,7 @@ void setup(){
 
   lfa.clearBarStrobe();
   lfa.clearInvertBits();
-  delay(20);              // delay a bit
+  delay(200);              // delay a bit
 
 /*****************************************************************************
  * start lfa and play tone to indicate successful start
@@ -123,35 +142,42 @@ void setup(){
 
   // ** set roomba mode
   setMode(128);           // put roomba into passive mode
-  setMode(131);           // put roomba into safe mode
+  setMode(131);           // put roomba into safe(131) or full(132) mode
                           // roomba is now ready to receive commands
                               
   //readyDance();         // jiggle to signal ready to go
   playBeep();             // beep once to indicate waiting for button press
   waitForButton();        // wait for the button to be pushed
-  
+  delay(1000);
   //Serial.println("roomba initialized into safe mode, ready to go");
 } // end setup
 
+/*********************************************************************
+ *********************************************************************
+ *********************************************************************/
 void loop(){
   
   // send a high and low ping from the sonar sensor
   ping();
   distance = calcDistance();    // calculate the distance to an object
-  
 
-// drive forward until an obstacle is detected
-  while((int)distance > SAFEDIST){
-    Serial.print("distance to obstacle: ");
-    Serial.println(distance);
+  if(distance < SAFEDIST){
+    stopDrive();    // stop motors and put roomba into passive mode
+    Serial.println("proximity alert: STOP!");
+    while(1){}    // trap processing when proximity alarm goes off
+  }
+
+// drive forward following a dark line on a light background
     
    follow(); 
-   ping();
-   distance = calcDistance();
-   //Serial.print("distance to obstacle: ");
-   //Serial.println(distance);
-  } // end while
-  stopDrive();
+
+
+  // temporary stop so i can use roomba full mode
+  // need to stop roomba on button press
+  if(digitalRead(buttonPin)==LOW){
+    Serial.println("stopping");
+    stopDrive();
+  }
 } // end loop
 
 // ************** my functions *****************
@@ -166,29 +192,51 @@ void loop(){
  * out: nothing out
  ********************************************************/
  void follow(void){
-  int error;            // error value read from sensor
-  int leftSpeed;        // speed of left wheel motor
-  int rightSpeed;       // speed of right wheel motor
   
-  error = lfa.getPosition();// get error reading from sensor
-  Serial.println(error);
+  lastError = error;            // keep track of the previous erro for d term  
+  error = lfa.getPosition();    // get error reading from sensor
+  totalError += error;          // sum all errors for i term
+  
+  /*****************************************************************
+   * the PID equation calculates the system ouptu for a given sensor
+   * reading by summing the product of the p coefficient and the current
+   * error, the product of the i coefficient and the sum of all error
+   * from the time the system started, and the d coefficient times the
+   * difference between current error and the last error. since the elapsed
+   * time between readings is constant there is no need to divide, this gives 
+   * the instantaneous slope of the line tangent to the curve of the error
+   *************************************************************************/
+  outputV = (int)(Kp * error + Ki * totalError + Kd * (error - lastError));
+  Serial.print("output power ");
+  Serial.println(outputV);
+  constrain(outputV, -250, 250);
   // calculate left and right motor speeds
-  if(error > 0){
-    leftSpeed = BASESPEED + (int)BASESPEED * CORRECTION;     // increase left wheel speed by 25%
-    rightSpeed = BASESPEED;         // set right wheel speed to base
+  if(outputV  > 0){
+    leftSpeed = BASESPEED  + outputV;     // increase left wheel speed by outputV
+    rightSpeed = BASESPEED;                           // set right wheel speed to base
   } // end > 0 veering left
   else
-  if(error < 0){
-    leftSpeed = BASESPEED;         // set left wheel speed to base 
-    rightSpeed = BASESPEED + (int)BASESPEED * CORRECTION;   // increase right wheel speed by 25%     
+  if(outputV < 0){
+    leftSpeed = BASESPEED;                           // set left wheel speed to base 
+    rightSpeed = BASESPEED  + abs(outputV);   // increase right wheel speed by outputV     
   } // end < 0 veering right
   else
   {
-    leftSpeed = leftSpeed;
-    rightSpeed = rightSpeed;
+    leftSpeed = lls;
+    rightSpeed = lrs;
+    Serial.println("zero error");
   } // END == 0 going straight
-  
+ 
   // drive motors
+  lls = leftSpeed;        // record last left wheel motor speed
+  lrs = rightSpeed;       // record last right wheel motot speed
+
+  Serial.print("left motor speed: ");
+  Serial.println(leftSpeed);
+
+  Serial.print("right motor speed: ");
+  Serial.println(rightSpeed);
+  
   driveWheels(rightSpeed, leftSpeed);
   //driveWheels(0, 0);
  } // end follow
@@ -294,8 +342,8 @@ void stopDrive(void){
 void driveWheels(int right, int left)
 {
   // compensate for left pull
-  //float comp = left * 0.1;              // compensate for a left pull in my roomba
-  //left += (int)comp;
+  float comp = left * 0.1;              // compensate for a left pull in my roomba
+  left += (int)comp;
   //Serial.print("left comp speed ");
   //Serial.println(left);
   constrain(right, -500, 500);
