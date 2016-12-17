@@ -39,7 +39,7 @@
 
 // global scope
 
-const int BASESPEED = 200;            // base speed of wheel motors
+const int BASESPEED = 300;            // base speed of wheel motors
 const byte LFAADDRESS = 0x3E;  // assign an address to the line follower array
 const float PIE = 3.14159;        // value of pi used in calculating angles
 const int SAFEDIST = 20;          // 20cm safety zone, used for sonar
@@ -47,9 +47,9 @@ const float CORRECTION = 1.25;     // increase wheel speed by this factor
 
 // ****** PID constants *****
 
-const float Kp = 1;         // proportional coefficient
-const float Ki = 0;         // integral coefficient
-const float Kd = 0;         // derivative coefficient
+const float Kp = 2.5;         // proportional coefficient
+const float Ki = 0.005;         // integral coefficient
+const float Kd = 0.5;         // derivative coefficient
 
 // ***** PID variables *****
 
@@ -98,10 +98,29 @@ void setup(){
   Serial.begin(9600);       // start serial port for monitor
   //Serial.println("hello dave");
 
+  pinMode (ddPin, OUTPUT);            // set ddPin(5) to output, that's from arduino to roomba
+  pinMode(buttonPin, INPUT_PULLUP);   // set the buttonPin(12) as in pullup input pin
+  
   mySerial.begin(19200);       // start software serial for communicating with roomba
                                 // use software serial because roomba's tx doesn't always
                                 // carry enough voltage to meet arduino's requirements
   delay(10);              // set a short delay to allow the command to propegate
+  
+  // *** wake up roomba
+  
+  wakeUp(); // 2 second delay built into the wakeUp() function
+
+  // ** set roomba mode
+  setMode(128);           // put roomba into passive mode
+  setMode(131);           // put roomba into safe(131) or full(132) mode
+                          // roomba is now ready to receive commands
+                              
+  //readyDance();         // jiggle to signal ready to go
+  playBeep();             // beep once to indicate waiting for button press
+  waitForButton();        // wait for the button to be pushed
+  delay(1000);
+  //Serial.println("roomba initialized into safe mode, ready to go");
+
 
 /******************************************************************
  * set up the line follower array
@@ -122,34 +141,21 @@ void setup(){
 /*****************************************************************************
  * start lfa and play tone to indicate successful start
  *****************************************************************************/
- uint8_t lfaStatus = lfa.begin();
+   uint8_t lfaStatus = lfa.begin();
+  
+   if(lfaStatus){
+    Serial.println("lfa ok");
+    playBeep2();        // change tone later so it's unique to lfa start
+   } // end if, lfa began normally
+   else{
+    
+    // do something else here maybe set mofe to off
+    while(1);   // trap exectution
+    Serial.println("oops");       // print message if sensor bar fails to initialize
+   } // end else, lfa didn't begin properly
 
- if(lfaStatus){
-  Serial.println("lfa ok");
-  playBeep2();        // change tone later so it's unique to lfa start
- } // end if, lfa began normally
- else{
-  
-  // do something else here maybe set mofe to off
-  while(1);       // trap exectution
- } // end else, lfa didn't begin properly
-  
-  pinMode (ddPin, OUTPUT);            // set ddPin(5) to output, that's from arduino to roomba
-  pinMode(buttonPin, INPUT_PULLUP);   // set the buttonPin(12) as in pullup input pin
-  
-  // *** wake up roomba
-  wakeUp(); // 2 second delay built into the wakeUp() function
-
-  // ** set roomba mode
-  setMode(128);           // put roomba into passive mode
-  setMode(131);           // put roomba into safe(131) or full(132) mode
-                          // roomba is now ready to receive commands
-                              
-  //readyDance();         // jiggle to signal ready to go
-  playBeep();             // beep once to indicate waiting for button press
-  waitForButton();        // wait for the button to be pushed
-  delay(1000);
-  //Serial.println("roomba initialized into safe mode, ready to go");
+  waitForButton();      // wait for a button press after all initialization has succeded
+  delay(250);           //delay so pin 12 can re-set to HIGH
 } // end setup
 
 /*********************************************************************
@@ -176,7 +182,8 @@ void loop(){
   // need to stop roomba on button press
   if(digitalRead(buttonPin)==LOW){
     Serial.println("stopping");
-    stopDrive();
+    stopDrive();              // stop wheel motors
+    setMode(128);             // put roomba into passive mode
   }
 } // end loop
 
@@ -209,16 +216,16 @@ void loop(){
   outputV = (int)(Kp * error + Ki * totalError + Kd * (error - lastError));
   Serial.print("output power ");
   Serial.println(outputV);
-  constrain(outputV, -250, 250);
+  
   // calculate left and right motor speeds
   if(outputV  > 0){
-    leftSpeed = BASESPEED  + outputV;     // increase left wheel speed by outputV
-    rightSpeed = BASESPEED;                           // set right wheel speed to base
+    leftSpeed = BASESPEED  + (outputV / 2);     // increase left wheel speed by  half outputV
+    rightSpeed = BASESPEED - (outputV / 2);     // decrease right wheel by half outputV
   } // end > 0 veering left
   else
   if(outputV < 0){
-    leftSpeed = BASESPEED;                           // set left wheel speed to base 
-    rightSpeed = BASESPEED  + abs(outputV);   // increase right wheel speed by outputV     
+    leftSpeed = BASESPEED - ((abs(outputV)) / 2);     // decrease right wheel by half outputV 
+    rightSpeed = BASESPEED  + ((abs(outputV)) / 2);   // increase right wheel speed by outputV     
   } // end < 0 veering right
   else
   {
@@ -230,6 +237,13 @@ void loop(){
   // drive motors
   lls = leftSpeed;        // record last left wheel motor speed
   lrs = rightSpeed;       // record last right wheel motot speed
+
+  // constrain the motor speed, roomba's max speed is 500 mm/sec
+  constrain(leftSpeed, 0, 500); 
+  constrain(rightSpeed, 0, 500);
+
+  Serial.print("total error: ");
+  Serial.println(totalError);
 
   Serial.print("left motor speed: ");
   Serial.println(leftSpeed);
@@ -366,11 +380,14 @@ void driveWheels(int right, int left)
   delay(500);
   digitalWrite(ddPin, HIGH);
   delay(2000);
+  Serial.println("i'm awake.");
 }
 
 void setMode(int modeCode){
   mySerial.write(modeCode);       // put roomba into passive mode
   delay(20);                      // wait for mode change to propegate
+  Serial.print("mode set to: ");
+  Serial.println(modeCode);
 } // end setMode
 
 void getInfo(void){
