@@ -39,7 +39,7 @@
 
 // global scope
 
-const int BASESPEED = 300;            // base speed of wheel motors
+const int BASESPEED = 250;            // base speed of wheel motors
 const byte LFAADDRESS = 0x3E;  // assign an address to the line follower array
 const float PIE = 3.14159;        // value of pi used in calculating angles
 const int SAFEDIST = 20;          // 20cm safety zone, used for sonar
@@ -47,9 +47,12 @@ const float CORRECTION = 1.25;     // increase wheel speed by this factor
 
 // ****** PID constants *****
 
-const float Kp = 2.5;         // proportional coefficient
-const float Ki = 0.005;         // integral coefficient
-const float Kd = 0.5;         // derivative coefficient
+//const float Kp = 2.41;         // proportional coefficient
+const float Kp = 1;
+//const float Ki = 0.0066;         // integral coefficient
+const float Ki = 0;
+//const float Kd = 0.55;         // derivative coefficient
+const float Kd = 0;
 
 // ***** PID variables *****
 
@@ -285,16 +288,16 @@ void ping(void){
  * beep to indicate roomba is waiting for a button press
  ***************************************************/
  void playBeep(void){
-   mySerial.write("\x8c\x01\x04\x42\x20\x3e\x20\x42\x20\x3e\x20"); // [140] [1] [4] [68] [32]
-   mySerial.write("\x8d\x01"); // [141] [1] play it (in slot 1)
+   mySerial.write("\x8c\x01\x01\x42\x20"); // [140] [1] [1] [68] [32]
+   mySerial.write("\x8d\x01"); // [141] [1] play song stored in position 1 of roomba's memory
  } // end playBeed
 
  /************************************************
  * beep to indicate lfa has been started
  ***************************************************/
  void playBeep2(void){
-   mySerial.write("\x8c\x02\x04\x4c\x10\x4a\x10\x48\x10\x47\x10"); // [140] [1] [4] [68] [32]
-   mySerial.write("\x8d\x02"); // [141] [2] play it (in slot 2)
+   mySerial.write("\x8c\x02\x01\x4c\x10\x4a\x10\x48\x10\x47\x10"); // [140] [2] [1] [76] [16]
+   mySerial.write("\x8d\x02"); // [141] [2] play song in postition 2 of roomba's memory
  } // end playBeed
 
 /**********************************************
